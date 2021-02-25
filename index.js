@@ -201,6 +201,6 @@ new ssh2.Server({
     }).on('end', function () {
         console.log('Client disconnected');
     });
-}).listen(39745, '127.0.0.1', function () {
+}).listen(39745, '0.0.0.0', function () {
     console.log('Listening on port ' + this.address().port);
 });
