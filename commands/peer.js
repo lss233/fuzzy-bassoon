@@ -4,7 +4,10 @@ const chalk = require('chalk')
 const whois = require('../whois');
 const promisify = require('util').promisify
 const exec = promisify(require('child_process').exec);
-
+const hostnameValidator = /((^\s*((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\s*$)|(^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$))|(^\s*((?=.{1,255}$)(?=.*[A-Za-z].*)[0-9A-Za-z](?:(?:[0-9A-Za-z]|\b-){0,61}[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:(?:[0-9A-Za-z]|\b-){0,61}[0-9A-Za-z])?)*)\s*$)/;
+function isValidHostname(text) {
+    return hostnameValidator.test(text)
+}
 module.exports = async function newPeering(session) {
     let node = session.node
     let question = text => new Promise((resolve, reject) => {
@@ -30,7 +33,8 @@ module.exports = async function newPeering(session) {
         let answer;
         while(answer = await question(text)) {
             try{
-                if(await validator(answer.trim())) return answer;
+                answer = answer.replace(/\n/g, '').trim()
+                if(await validator(answer)) return answer;
                 session.sendMessage(failText)
             } catch(e) {
                 console.error('Error when validating ', answer, e)
@@ -46,7 +50,7 @@ module.exports = async function newPeering(session) {
     )
     let hostname = await questionValidate(
         'Your Clearnet Hostname: ', 
-        async hostname => true,
+        async hostname => isValidHostname(hostname),
         'Invalid Hostname. Please retry.')
 
     let wgPort = await questionValidate(
@@ -135,7 +139,7 @@ export none;
     }).write()
     fs.writeFileSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
     fs.writeFileSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
-    await exec('wg-quick up "__dirname + `/../data/wireguards/${interfaceName}.conf`"')
+    await exec(`wg-quick up "${__dirname}/../data/wireguards/${interfaceName}.conf"`)
     await exec('birdc')
     session.sendMessage('')
     session.sendMessage('Congratulation! The peer process over my side has')
