@@ -41,6 +41,8 @@ new ssh2.Server({
     hostKeys: [fs.readFileSync('.ssh/privkey')]
 }, function (client) {
     let user;
+    let isPGPAuth = true;
+    let mntnerInfo;
     console.log('Client connected!');
 
     client.on('authentication', async function (ctx) {
@@ -59,19 +61,23 @@ new ssh2.Server({
         user = Buffer.from(ctx.username).toString();
 
         console.log(user, ctx.method)
-
-        let mntnerInfo = await whois.queryLast('mntner/' + user);
-        if (mntnerInfo === undefined ||
-            ((user = mntnerInfo['mntner'][0]),
-                !/^[a-zA-Z0-9-]+$/.test(user) && user.toLowerCase().endsWith('-mnt'))
-        ) {
-            return rejectWithMessage('Please login as mntner.')
+        try {
+            mntnerInfo = await whois.queryLast('mntner/' + user);
+            if (mntnerInfo === undefined ||
+                ((user = mntnerInfo['mntner'][0]),
+                    !/^[a-zA-Z0-9-]+$/.test(user) && user.toLowerCase().endsWith('-mnt'))
+            ) {
+                return rejectWithMessage('Please login as mntner.')
+            }
+        } catch(e) {
+            console.error(e)
+            ctx.reject();
         }
+        
 
         switch (ctx.method) {
             case 'password':
                 return ctx.reject(['publickey', 'keyboard-interactive']);
-                break;
             case 'publickey':
                 try {
                     for (let auth of mntnerInfo.auth) {
@@ -83,6 +89,7 @@ new ssh2.Server({
                                 continue;
                             }
                             user = mntnerInfo['mntner'][0]
+                            isPGPAuth = false;
                             return ctx.accept();
                         }
                     }
@@ -92,67 +99,12 @@ new ssh2.Server({
                 }
                 break;
             case 'keyboard-interactive':
-                try {
-                    const password = crypto.randomBytes(16).toString('base64')
-                    console.log(password)
-                    for (let auth of mntnerInfo.auth) {
-                        if (auth.startsWith('pgp-fingerprint')) {
-                            let publicKeyArmored = await hkp.lookup({ query: '0x' + auth.substr(16) });
-                            let publicKey = await openpgp.key.readArmored(publicKeyArmored);
-                            let encrypted = await openpgp.encrypt({
-                                message: openpgp.message.fromText(password),
-                                publicKeys: publicKey.keys,
-                                commentString: 'A'
-                            });
-                            let promptText = `
-Entering PGP publickey authentication mode.
-Please decrypt following text using 
-${chalk.bgWhite.black(auth)}
-Encrypted data:
-`
-                                for(let i of encrypted.data) {
-                                    promptText += chalk.green(i)
-                                }
-                                promptText += 'Please input the answer: '
-                                let retry = 0;
-                                let result = await new Promise((resolve, reject) => {
-                                ctx.prompt(promptText,
-                                    (answer) => {
-                                        if(retry++ >= 2) {
-                                            resolve(false);
-                                        }
-                                        if (answer.length === 0) {
-                                            return ctx.reject(['keyboard-interactive']);
-                                        }
-                                        if (password == answer[0]) {
-                                            return ctx.accept(), resolve(true);
-                                        }
-                                        return ctx.reject(['keyboard-interactive']);
-                                    })
-                                });
-                                if(result) {
-                                    return;
-                                }
-                        }
-                    }
-                    return rejectWithMessage(`
-Authentication failed.
-We support pgp-fingerprint and ssh-publickey only,
-But nether of these could verify your identity.
-If you are new to DN42, it may take a hour to update
-the database after the pull request is merged.
-You may want to try it again, sorry for the inconvenience.
-                        `)
-                } catch (e) {
-                    console.log(e)
-                }
-                break;
+                return ctx.accept();
             default:
                 return ctx.reject();
         }
     }).on('ready', function () {
         console.log('Client authenticated!');
-
         client.on('session', function (accept, reject) {
             let stdin, stdout;
             var session = accept();
@@ -173,12 +125,80 @@ You may want to try it again, sorry for the inconvenience.
                             stdout.write(i + '\r\n')
                         }
                     }
+                    session.clearScreen = () => {
+                        if(session.pty && session.pty.rows && session.pty.cols){
+                            shell.stdout.write('\033[0;0H');
+                            for(var x = 0; x < session.pty.rows * session.pty.cols; x++) {
+                                shell.stdout.write(' ');
+                            }
+                            shell.stdout.write('\033[0;0H');
+                        }
+                    }
                     session.sendErrMessage = (text) => {
                         for (let i of text.split('\n')) {
                             stderr.write(i + '\r\n')
                         }
                     }
 
+                    if(isPGPAuth) {
+                        try {
+                            const password = 'lss233PeerValidation@' + crypto.randomBytes(16).toString('base64')
+                            for (let auth of mntnerInfo.auth) {
+                                if (auth.startsWith('pgp-fingerprint')) {
+                                    let publicKeyArmored = await hkp.lookup({ query: '0x' + auth.substr(16) });
+                                    let publicKey = await openpgp.key.readArmored(publicKeyArmored);
+                                    session.sendMessage('Entering PGP publickey authentication mode.')
+                                    session.sendMessage('Please sign following text using ')
+                                    session.sendMessage(`${chalk.bgWhite.black(auth)}`)
+                                    session.sendMessage('Text:')
+                                    session.sendMessage(`${chalk.bgGray(password)}`)
+                                    session.sendMessage(`Please provide the PGP signed text:`)
+                                    let armoredText = ''
+                                    let rl = readline.createInterface({
+                                        input: shell.stdin,
+                                        output: shell.stdout,
+                                        terminal: true
+                                    });
+                                    await new Promise((resolve, reject) => {
+                                        rl.on('line', async text => {
+                                            text = text.trim();
+                                            armoredText += text + '\r\n';
+                                            if(text == '-----END PGP SIGNATURE-----') {
+                                                rl.close();
+                                                const signedMessage = await openpgp.cleartext.readArmored(armoredText);
+                                                const verified = await signedMessage.verify(publicKey.keys)
+                                                if (await verified[0].verified) {
+                                                    isPGPAuth = false;
+                                                    return resolve();
+                                                    // console.log('signed by key id ' + verified.signatures[0].keyid.toHex());
+                                                } else {
+                                                    return reject('signature could not be verified')
+                                                }
+                                            }
+                                        })
+                                    })
+                                }
+                            }
+                            if(isPGPAuth)
+                                return session.sendErrMessage(`
+    Authentication failed.
+    We support pgp-fingerprint and ssh-publickey only,
+    But nether of these could verify your identity.
+    If you are new to DN42, it may take a hour to update
+    the database after the pull request is merged.
+    You may want to try it again, sorry for the inconvenience.
+                                    `)
+                        } catch (e) {
+                            session.sendErrMessage('PGP signature could not be verified.')
+                            shell.end()
+                            console.log(e)
+                            return;
+                        }
+                    }
+                    if(isPGPAuth) {
+                        return shell.end();
+                    }
+                    session.clearScreen();
 
                     session.sendMessage(fs.readFileSync(__dirname + '/banner.txt').toString())
                     session.node = node
@@ -230,7 +250,7 @@ You may want to try it again, sorry for the inconvenience.
                                     case 'exit':
                                         session.rl.close();
                                         session.rl = undefined;
-                                        shell.close();
+                                        shell.end();
                                         break;
                                     default:
                                         session.sendErrMessage(chalk.red('bash: ') + command[0] + ': command not found')
@@ -243,18 +263,16 @@ You may want to try it again, sorry for the inconvenience.
                                 prompt();
                             }
                         })
-                        session.rl.on('close', () => {
-                            session.rl = readline.createInterface({
-                                input: stdin,
-                                output: stdout,
-                                terminal: true
-                            });
-                            prompt();
+                        session.rl.on('SIGINT', () => {
+                            session.rl.prompt()
+                        })
+                        .on('SIGTSTP', () => {
+                            shell.end();
                         })
                     }
                     await prompt();
                 })
-                .on('signal', function () {
+                .on('end', function () {
                     console.log('SIGNAL received')
                     session.rl.close()
                     session.rl = readline.createInterface({
