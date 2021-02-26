@@ -254,7 +254,7 @@ new ssh2.Server({
                                         shell.end();
                                         break;
                                     default:
-                                        session.sendErrMessage(chalk.red('bash: ') + command[0] + ': command not found')
+                                        session.sendErrMessage('\r\n' + chalk.red('bash: ') + command[0] + ': command not found')
                                         break;
                                 }
                             } catch (e) {

@@ -31,12 +31,17 @@ module.exports = async function newPeering(session) {
         }
     }
     let questionValidate = async (text, validator, failText) => {
-        let answer;
-        while(answer = await question(text)) {
+        while(true) {
+            let answer = await question(text)
             try{
-                answer = answer.replace(/\n/g, '').trim()
-                if(await validator(answer)) return answer;
-                session.sendMessage(failText)
+                if(answer && 
+                    ((answer = answer.replace(/\n/g, '').trim()),
+                    await validator(answer))
+                ) {
+                    return answer;
+                } else {
+                    session.sendMessage(failText)
+                }
             } catch(e) {
                 console.error('Error when validating ', answer, e)
             }
@@ -134,6 +139,19 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         session.sendMessage(chalk.red('Abort peering.'))
         return;
     }
+    
+    fs.writeFileSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
+    fs.writeFileSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
+    try {
+        await exec(`wg-quick up "${__dirname}/../data/wireguards/${interfaceName}.conf"`)
+        await exec('birdc')
+    } catch(e) {
+        session.sendMessage('OOps! Something seems wrong in your input.')
+        session.sendMessage('Unable to establish a peer connection.')
+        fs.unlinkSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
+        fs.unlinkSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
+        return;
+    }
     session.db.get('peers').insert({
         mntner: session.user,
         endpoint: hostname + ':' + wgPort,
@@ -143,10 +161,7 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         interface: interfaceName,
         bird: `dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP`
     }).write()
-    fs.writeFileSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
-    fs.writeFileSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
-    await exec(`wg-quick up "${__dirname}/../data/wireguards/${interfaceName}.conf"`)
-    await exec('birdc')
+    
     session.sendMessage('')
     session.sendMessage('Congratulation! The peer process over my side has')
     session.sendMessage('been completed. Once you have set up, you can check')
