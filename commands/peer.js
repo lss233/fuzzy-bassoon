@@ -45,7 +45,7 @@ module.exports = async function newPeering(session) {
 
     let asn = await questionValidate(
         'Your AS Number: ',
-        async asn => isNaN(asn) && validateOwnership(await whois.queryLast(`aut-num/AS${asn}`)),
+        async asn => !isNaN(asn) && validateOwnership(await whois.queryLast(`aut-num/AS${asn}`)),
         `Invalid AS Number. Please input a valid AS Number which ${chalk.bgYellow.blue('mnt-by')} is ${chalk.yellow(session.user)}`
     )
     let hostname = await questionValidate(
