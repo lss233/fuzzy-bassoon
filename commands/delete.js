@@ -12,6 +12,6 @@ module.exports = async function deletePeer(session, id) {
     exec('birdc')
     session.db.get('peers').remove({id: id, mntner: session.user}).write()
     fs.unlinkSync(`${__dirname}/../data/wireguards/${info.interface}.conf`)
-    fs.unlinkSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`)
+    fs.unlinkSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(info.asn.length - 4, asn.length)}AP.conf`)
     session.sendMessage('Peer has been deleted.')
 }

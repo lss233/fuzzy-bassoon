@@ -19,7 +19,7 @@ module.exports = async function newPeering(session) {
     })
     let questionYesOrNo = async text => {
         let qA;
-        while (qA = await question(text + ' [Y/n] ')) {
+        while (qA = await question(text + ' [y/N] ')) {
             console.log(qA)
             if (qA == '' || qA == ' ' || qA == 'y' || qA == 'yes' || qA == 'Y') {
                 return true;
@@ -63,6 +63,7 @@ module.exports = async function newPeering(session) {
         'Your WireGuard PublicKey: ',
         async key => key.length == 44,
         'Invalid publickey provided. Please retry.')
+    let interfaceName = `dn42_${asn.substring(asn.length - 4, asn.length)}_AP`
 
     let wgPostUp = ''
 
@@ -138,6 +139,7 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         endpoint: hostname + ':' + wgPort,
         publicKey: wgPublickey,
         address: [ipv4, ipv6, linkLocal].filter(i => i).join('/'),
+        asn: asn,
         interface: interfaceName,
         bird: `dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP`
     }).write()
