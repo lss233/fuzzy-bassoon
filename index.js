@@ -8,6 +8,9 @@ const fs = require('fs'),
     openpgp = require('openpgp');
 openpgp.config.showComment = false
 openpgp.config.showVersion = false
+openpgp.config.versionString = 'FuzzyBasson v1.0.0'
+openpgp.config.commentString = 'i@lss233.com'
+
 const commands = require('./commands')
 
 const low = require('lowdb')
@@ -95,12 +98,11 @@ new ssh2.Server({
                     for (let auth of mntnerInfo.auth) {
                         if (auth.startsWith('pgp-fingerprint')) {
                             let publicKeyArmored = await hkp.lookup({ query: '0x' + auth.substr(16) });
-                            console.log(publicKeyArmored)
                             let publicKey = await openpgp.key.readArmored(publicKeyArmored);
-
                             let encrypted = await openpgp.encrypt({
                                 message: openpgp.message.fromText(password),
                                 publicKeys: publicKey.keys,
+                                commentString: 'A'
                             });
                             let promptText = `
 Entering PGP publickey authentication mode.
