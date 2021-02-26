@@ -4,7 +4,8 @@ const fs = require('fs'),
     chalk = require('chalk'),
     readline = require('readline'),
     node = require('./node'),
-    whois = require('./whois');
+    whois = require('./whois'),
+    openpgp = require('openpgp');
 
 const commands = require('./commands')
 
@@ -13,12 +14,12 @@ const FileSync = require('lowdb/adapters/FileSync')
 
 const adapter = new FileSync('./data/db.json')
 const db = low(adapter)
-db.defaults({peers: []}).write()
+db.defaults({ peers: [] }).write()
 db._.mixin(require('lodash-id'))
 
+const hkp = new openpgp.HKP('http://keys.gnupg.net');
 
 var utils = ssh2.utils;
-
 
 function checkValue(input, allowed) {
     const autoReject = (input.length !== allowed.length);
@@ -38,47 +39,109 @@ new ssh2.Server({
     let user;
     console.log('Client connected!');
 
-    client.on('authentication', function (ctx) {
+    client.on('authentication', async function (ctx) {
+        let rejectWithMessage = (msg) => {
+            if (ctx.method === 'keyboard-interactive') {
+                console.log(`Reject ${ctx.username} due to: ${msg}`)
+                ctx.prompt(chalk.bgRed.white('Error: ') + chalk.red(msg) + '\r\n Press Ctrl + C to continue.\r\n', () => {
+                    ctx.reject([])
+                })
+                ctx.reject([])
+            } else {
+                ctx.reject(['keyboard-interactive'])
+            }
+        }
+
         user = Buffer.from(ctx.username).toString();
+
         console.log(user, ctx.method)
+
+        let mntnerInfo = await whois.queryLast('mntner/' + user);
+        if (mntnerInfo === undefined ||
+            ((user = mntnerInfo['mntner'][0]),
+                !/^[a-zA-Z0-9-]+$/.test(user) && user.toLowerCase().endsWith('-mnt'))
+        ) {
+            return rejectWithMessage('Please login as mntner.')
+        }
+
         switch (ctx.method) {
             case 'password':
-                /*
-                var password = Buffer.from(ctx.password);
-                if (password.length !== allowedPassword.length
-                    || !crypto.timingSafeEqual(password, allowedPassword)) {
-                    return ctx.reject();
-                }
-                */
-
+                return ctx.reject(['publickey', 'keyboard-interactive']);
                 break;
             case 'publickey':
-                if (user.includes('-')) {
-                    whois.query('mntner/' + user).then(resp => {
-                        try {
-                            resp = resp[Object.keys(resp).filter(i => i.toUpperCase() == 'MNTNER/' + user.toUpperCase())[0]];
-
-                            for (let auth of resp.auth) {
-                                if (auth.startsWith('ssh-')) {
-                                    let allowedPubKey = utils.parseKey(auth)
-                                    if (ctx.key.algo !== allowedPubKey.type
-                                        || !checkValue(ctx.key.data, allowedPubKey.getPublicSSH())
-                                        || (ctx.signature && allowedPubKey.verify(ctx.blob, ctx.signature) !== true)) {
-                                        continue;
-                                    }
-                                    user = resp['mntner'][0]
-                                    return ctx.accept();
-                                }
+                try {
+                    for (let auth of mntnerInfo.auth) {
+                        if (auth.startsWith('ssh-')) {
+                            let allowedPubKey = utils.parseKey(auth)
+                            if (ctx.key.algo !== allowedPubKey.type
+                                || !checkValue(ctx.key.data, allowedPubKey.getPublicSSH())
+                                || (ctx.signature && allowedPubKey.verify(ctx.blob, ctx.signature) !== true)) {
+                                continue;
                             }
-                            ctx.reject('Invalid publickey received. Cannot verify your identity.');
-                        } catch (e) {
-                            console.log(e)
-                            ctx.reject(e);
+                            user = mntnerInfo['mntner'][0]
+                            return ctx.accept();
                         }
+                    }
+                    return rejectWithMessage('Could not authenticate with your publickey. Please use your mntner publickey to login.')
+                } catch (e) {
+                    console.log(e)
+                }
+                break;
+            case 'keyboard-interactive':
+                try {
+                    const password = crypto.randomBytes(16).toString('base64')
+                    console.log(password)
+                    for (let auth of mntnerInfo.auth) {
+                        if (auth.startsWith('pgp-fingerprint')) {
+                            let publicKeyArmored = await hkp.lookup({ query: '0x' + auth.substr(16) });
+                            console.log(publicKeyArmored)
+                            let publicKey = await openpgp.key.readArmored(publicKeyArmored);
 
-                    })
-                } else {
-                    ctx.reject('Please login by using your mntner as username.')
+                            let encrypted = await openpgp.encrypt({
+                                message: openpgp.message.fromText(password),
+                                publicKeys: publicKey.keys,
+                            });
+                            let promptText = `
+Entering PGP publickey authentication mode.
+Please decrypt following text using 
+${chalk.bgWhite.black(auth)}
+Encrypted data:
+`
+                                for(let i of encrypted.data) {
+                                    promptText += chalk.green(i)
+                                }
+                                promptText += 'Please input the answer: '
+                                let retry = 0;
+                                let result = await new Promise((resolve, reject) => {
+                                ctx.prompt(promptText,
+                                    (answer) => {
+                                        if(retry++ >= 2) {
+                                            resolve(false);
+                                        }
+                                        if (answer.length === 0) {
+                                            return ctx.reject(['keyboard-interactive']);
+                                        }
+                                        if (password == answer[0]) {
+                                            return ctx.accept(), resolve(true);
+                                        }
+                                        return ctx.reject(['keyboard-interactive']);
+                                    })
+                                });
+                                if(result) {
+                                    return;
+                                }
+                        }
+                    }
+                    return rejectWithMessage(`
+Authentication failed.
+We support pgp-fingerprint and ssh-publickey only,
+But nether of these could verify your identity.
+If you are new to DN42, it may take a hour to update
+the database after the pull request is merged.
+You may want to try it again, sorry for the inconvenience.
+                        `)
+                } catch (e) {
+                    console.log(e)
                 }
                 break;
             default:
@@ -112,7 +175,7 @@ new ssh2.Server({
                             stderr.write(i + '\r\n')
                         }
                     }
-                    
+
 
                     session.sendMessage(fs.readFileSync(__dirname + '/banner.txt').toString())
                     session.node = node
@@ -170,7 +233,7 @@ new ssh2.Server({
                                         session.sendErrMessage(chalk.red('bash: ') + command[0] + ': command not found')
                                         break;
                                 }
-                            } catch(e) {
+                            } catch (e) {
                                 console.log(e)
                             }
                             if (session.rl) {
