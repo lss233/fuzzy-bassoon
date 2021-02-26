@@ -6,7 +6,8 @@ const fs = require('fs'),
     node = require('./node'),
     whois = require('./whois'),
     openpgp = require('openpgp');
-
+openpgp.config.showComment = false
+openpgp.config.showVersion = false
 const commands = require('./commands')
 
 const low = require('lowdb')
