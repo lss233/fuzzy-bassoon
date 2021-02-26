@@ -225,6 +225,9 @@ new ssh2.Server({
                                     case 'help':
                                         await commands.help(session);
                                         break;
+                                    case 'info':
+                                        await commands.info(session);
+                                        break;
                                     case 'show':
                                         await commands.show(session);
                                         break;

@@ -4,4 +4,5 @@ module.exports = {
     peer: require('./peer'),
     show: require('./show'),
     whois: require('./whois'),
+    info: require('./info'),
 }
