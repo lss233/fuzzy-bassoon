@@ -50,9 +50,9 @@ new ssh2.Server({
             if (ctx.method === 'keyboard-interactive') {
                 console.log(`Reject ${ctx.username} due to: ${msg}`)
                 ctx.prompt(chalk.bgRed.white('Error: ') + chalk.red(msg) + '\r\n Press Ctrl + C to continue.\r\n', () => {
-                    ctx.reject([])
+                    ctx.reject(['none'])
                 })
-                ctx.reject([])
+                ctx.reject(['none'])
             } else {
                 ctx.reject(['keyboard-interactive'])
             }
@@ -180,14 +180,15 @@ new ssh2.Server({
                                 }
                             }
                             if(isPGPAuth)
-                                return session.sendErrMessage(`
+                                session.sendErrMessage(`
     Authentication failed.
     We support pgp-fingerprint and ssh-publickey only,
     But nether of these could verify your identity.
-    If you are new to DN42, it may take a hour to update
+    If you are new to DN42, it may take an hour to update
     the database after the pull request is merged.
     You may want to try it again, sorry for the inconvenience.
                                     `)
+                                return shell.end();
                         } catch (e) {
                             session.sendErrMessage('PGP signature could not be verified.')
                             shell.end()
