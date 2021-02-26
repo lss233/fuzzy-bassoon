@@ -146,6 +146,11 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         await exec(`wg-quick up "${__dirname}/../data/wireguards/${interfaceName}.conf"`)
         await exec('birdc')
     } catch(e) {
+        console.log('>> ' + __dirname + `/../data/wireguards/${interfaceName}.conf`)
+        console.log(wgConf)
+        console.log('>> ' + __dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`)
+        console.log(birdCfg)
+        console.error(e)
         session.sendMessage('OOps! Something seems wrong in your input.')
         session.sendMessage('Unable to establish a peer connection.')
         fs.unlinkSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
