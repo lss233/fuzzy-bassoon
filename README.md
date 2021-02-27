@@ -17,6 +17,7 @@ Next, create a file named `node.json`:
     "asn": "Your ASN",
     "mpbgp": true, // Is MP-BGP Supported ?
     "wireguard": {
+        "endpoint": "Tell them your endpoint",
         "publickey": "Your WireGuard Public Key",
         "privatekey": "Yourr WireGuard Private Key",
         "ipv4": "The DN42 IPv4 Address on this machine",
@@ -42,3 +43,4 @@ or systemd or tmux and something else. whatever.
 ```
 node index.js
 ```
+

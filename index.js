@@ -286,9 +286,13 @@ new ssh2.Server({
                     });
                 });
         })
+    }).on('error', function (err) {
+        console.error(user, err)
     }).on('end', function () {
         console.log('Client disconnected');
     });
+}).on('error', function (err) {
+    console.error(err)
 }).listen(39745, '0.0.0.0', function () {
     console.log('Listening on port ' + this.address().port);
 });
