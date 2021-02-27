@@ -128,9 +128,7 @@ new ssh2.Server({
                     session.clearScreen = () => {
                         if(session.pty && session.pty.rows && session.pty.cols){
                             shell.stdout.write('\033[0;0H');
-                            for(var x = 0; x < session.pty.rows * session.pty.cols; x++) {
-                                shell.stdout.write(' ');
-                            }
+                            shell.stdout.write(Array(session.pty.rows * session.pty.cols + 1).join(' '));
                             shell.stdout.write('\033[0;0H');
                         }
                     }
@@ -142,7 +140,7 @@ new ssh2.Server({
 
                     if(isPGPAuth) {
                         try {
-                            const password = 'lss233PeerValidation@' + crypto.randomBytes(16).toString('base64')
+                            const password = 'Lss233PeerValidation@' + crypto.randomBytes(32).toString('base64')
                             for (let auth of mntnerInfo.auth) {
                                 if (auth.startsWith('pgp-fingerprint')) {
                                     let publicKeyArmored = await hkp.lookup({ query: '0x' + auth.substr(16) });
@@ -154,6 +152,7 @@ new ssh2.Server({
                                     session.sendMessage(`${chalk.bgGray(password)}`)
                                     session.sendMessage(`Please provide the PGP signed text:`)
                                     let armoredText = ''
+                                    let isDetachedSignature = true;
                                     let rl = readline.createInterface({
                                         input: shell.stdin,
                                         output: shell.stdout,
@@ -163,32 +162,58 @@ new ssh2.Server({
                                         rl.on('line', async text => {
                                             text = text.trim();
                                             armoredText += text + '\r\n';
-                                            if(text == '-----END PGP SIGNATURE-----') {
+                                            if(text.includes('-----BEGIN PGP SIGNED MESSAGE-----')){
+                                                isDetachedSignature = false;
+                                            } else if(text == '-----END PGP SIGNATURE-----') {
                                                 rl.close();
-                                                const signedMessage = await openpgp.cleartext.readArmored(armoredText);
-                                                const verified = await signedMessage.verify(publicKey.keys)
-                                                if (await verified[0].verified) {
-                                                    isPGPAuth = false;
-                                                    return resolve();
-                                                    // console.log('signed by key id ' + verified.signatures[0].keyid.toHex());
-                                                } else {
-                                                    return reject('signature could not be verified')
+                                                try {
+                                                    let isVerified = false;
+                                                    if(isDetachedSignature) {
+                                                        const clearText = await openpgp.cleartext.fromText(password)
+                                                        const signature = await openpgp.signature.readArmored(armoredText);
+                                                        const verified = await openpgp.verify({
+                                                            message: clearText,
+                                                            signature: signature,
+                                                            publicKeys: publicKey.keys
+                                                        })
+                                                        isVerified = await verified.signatures[0].verified
+                                                    } else {
+                                                        const signedMessage = await openpgp.cleartext.readArmored(armoredText);
+                                                        if(signedMessage.getText() != password) {
+                                                            isVerified = false;
+                                                        } else {
+                                                            const verified = await signedMessage.verify(publicKey.keys)
+                                                            isVerified = await verified[0].verified
+                                                        }
+                                                    }
+                                                    
+                                                    if (isVerified) {
+                                                        isPGPAuth = false;
+                                                        return resolve();
+                                                    } else {
+                                                        return reject('signature could not be verified')
+                                                    }
+                                                } catch(e) {
+                                                    console.error(e)
+                                                    reject('Invalid authentication.')
                                                 }
+                                                
                                             }
                                         })
                                     })
                                 }
                             }
-                            if(isPGPAuth)
+                            if(isPGPAuth){
                                 session.sendErrMessage(`
-    Authentication failed.
-    We support pgp-fingerprint and ssh-publickey only,
-    But nether of these could verify your identity.
-    If you are new to DN42, it may take an hour to update
-    the database after the pull request is merged.
-    You may want to try it again, sorry for the inconvenience.
+Authentication failed.
+We support pgp-fingerprint and ssh-publickey only,
+But nether of these could verify your identity.
+If you are new to DN42, it may take an hour to update
+the database after the pull request is merged.
+You may want to try it again, sorry for the inconvenience.
                                     `)
                                 return shell.end();
+                            }
                         } catch (e) {
                             session.sendErrMessage('PGP signature could not be verified.')
                             shell.end()
