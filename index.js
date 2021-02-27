@@ -128,7 +128,7 @@ new ssh2.Server({
                     session.clearScreen = () => {
                         if(session.pty && session.pty.rows && session.pty.cols){
                             shell.stdout.write('\033[0;0H');
-                            shell.stdout.write(Array(session.pty.rows * session.pty.cols + 1).join(' '));
+                            shell.stdout.write(' '.repeat(session.pty.rows * session.pty.cols));
                             shell.stdout.write('\033[0;0H');
                         }
                     }
