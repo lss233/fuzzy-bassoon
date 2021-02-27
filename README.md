@@ -15,7 +15,7 @@ Next, create a file named `node.json`:
 {
     "name": "The node name here",
     "asn": "Your ASN",
-    "mpbgp": true, // Is MP-BGP Supported ?
+    "mpbgp": true,
     "wireguard": {
         "endpoint": "Tell them your endpoint",
         "publickey": "Your WireGuard Public Key",
@@ -26,6 +26,7 @@ Next, create a file named `node.json`:
     }
 }
 ```
+Where `mpbgp` informs whether your node supports Multiprotocol BGP.
 
 Generate a ssh keypair for incoming connection.
 ```shell
@@ -33,7 +34,7 @@ ssh-keygen -t rsa -f ./.ssh/privkey
 ```
 
 Open your bird.conf, and add following:
-```toml
+```
 include "/path/to/fuzzy-bassoon/data/bird/*";
 ```
 
