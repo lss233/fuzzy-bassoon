@@ -42,10 +42,16 @@ new ssh2.Server({
 }, function (client) {
     let user;
     let isPGPAuth = true;
+    let handler;
     let mntnerInfo;
     console.log('Client connected!');
 
     client.on('authentication', async function (ctx) {
+        if(handler) {
+            handler(ctx)
+            handler = undefined
+            return;
+        }
         let rejectWithMessage = (msg) => {
             if (ctx.method === 'keyboard-interactive') {
                 console.log(`Reject ${ctx.username} due to: ${msg}`)
@@ -54,7 +60,13 @@ new ssh2.Server({
                 })
                 ctx.reject(['none'])
             } else {
-                ctx.reject(['keyboard-interactive'])
+                handler = (ctx) => {
+                    console.log(`Reject ${ctx.username} due to: ${msg}`)
+                    ctx.prompt(chalk.bgRed.white('Error: ') + chalk.red(msg) + '\r\n Press Ctrl + C to continue.\r\n', () => {
+                        ctx.reject(['none'])
+                    })
+                }
+                return ctx.reject(['keyboard-interactive'])
             }
         }
 

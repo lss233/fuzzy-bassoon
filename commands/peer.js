@@ -139,6 +139,7 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         session.sendMessage(chalk.red('Abort peering.'))
         return;
     }
+    session.sendMessage(chalk.red('Processing.'))
     
     fs.writeFileSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
     fs.writeFileSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
