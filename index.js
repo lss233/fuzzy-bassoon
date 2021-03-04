@@ -14,9 +14,9 @@ openpgp.config.commentString = 'i@lss233.com'
 const commands = require('./commands')
 
 const low = require('lowdb')
-const FileSync = require('lowdb/adapters/FileSync')
+const FileAsync = require('lowdb/adapters/FileAsync')
 
-const adapter = new FileSync('./data/db.json')
+const adapter = new FileAsync('./data/db.json')
 const db = low(adapter)
 db.defaults({ peers: [] }).write()
 db._.mixin(require('lodash-id'))
@@ -63,7 +63,7 @@ new ssh2.Server({
                 handler = (ctx) => {
                     console.log(`Reject ${ctx.username} due to: ${msg}`)
                     ctx.prompt(chalk.bgRed.white('Error: ') + chalk.red(msg) + '\r\n Press Ctrl + C to continue.\r\n', () => {
-                        ctx.reject(['none'])
+                        ctx.reject(['keyboard-interactive'])
                     })
                 }
                 return ctx.reject(['keyboard-interactive'])

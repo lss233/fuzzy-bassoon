@@ -157,8 +157,14 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         fs.unlinkSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
         fs.unlinkSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
         return;
-    }
-    session.db.get('peers').insert({
+    }   
+    session.sendMessage('')
+    session.sendMessage('Congratulation! The peer process over my side has')
+    session.sendMessage('been completed. Once you have set up, you can check')
+    session.sendMessage('our connection status on my Looking Glass:')
+    session.sendMessage(chalk.bgGrey('  https://lg.lss233.com  '))
+
+    session.db.get('peers').push({
         mntner: session.user,
         endpoint: hostname + ':' + wgPort,
         publicKey: wgPublickey,
@@ -167,10 +173,4 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         interface: interfaceName,
         bird: `dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP`
     }).write()
-    
-    session.sendMessage('')
-    session.sendMessage('Congratulation! The peer process over my side has')
-    session.sendMessage('been completed. Once you have set up, you can check')
-    session.sendMessage('our connection status on my Looking Glass:')
-    session.sendMessage(chalk.bgGrey('  https://lg.lss233.com  '))
 }
