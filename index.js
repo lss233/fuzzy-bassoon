@@ -14,9 +14,9 @@ openpgp.config.commentString = 'i@lss233.com'
 const commands = require('./commands')
 
 const low = require('lowdb')
-const FileAsync = require('lowdb/adapters/FileAsync')
+const FileSync = require('lowdb/adapters/FileSync')
 
-const adapter = new FileAsync('./data/db.json')
+const adapter = new FileSync('./data/db.json')
 const db = low(adapter)
 db.defaults({ peers: [] }).write()
 db._.mixin(require('lodash-id'))

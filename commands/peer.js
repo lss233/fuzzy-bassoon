@@ -145,7 +145,7 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
     fs.writeFileSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
     try {
         await exec(`wg-quick up "${__dirname}/../data/wireguards/${interfaceName}.conf"`)
-        await exec('birdc')
+        await exec('birdc c')
     } catch(e) {
         console.log('>> ' + __dirname + `/../data/wireguards/${interfaceName}.conf`)
         console.log(wgConf)
@@ -154,6 +154,8 @@ protocol bgp dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP
         console.error(e)
         session.sendMessage('OOps! Something seems wrong in your input.')
         session.sendMessage('Unable to establish a peer connection.')
+        exec(`wg-quick down "${__dirname}/../data/wireguards/${interfaceName}.conf"`).catch(() => {})
+        exec('birdc c').catch(() => {})
         fs.unlinkSync(__dirname + `/../data/wireguards/${interfaceName}.conf`, wgConf)
         fs.unlinkSync(__dirname + `/../data/bird/dn42_${session.user}_${asn.substring(asn.length - 4, asn.length)}AP.conf`, birdCfg)
         return;
