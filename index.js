@@ -62,7 +62,7 @@ new ssh2.Server({
             } else {
                 handler = (ctx) => {
                     console.log(`Reject ${ctx.username} due to: ${msg}`)
-                    ctx.prompt(chalk.bgRed.white('Error: ') + chalk.red(msg) + '\r\n Press Ctrl + C to continue.\r\n', () => {
+                    ctx.prompt(chalk.bgRed.white('Error: ') + chalk.red(msg) + '\r\n Press ' + chalk.bgWhite.black('Enter') + ' to continue.\r\n', () => {
                         ctx.reject(['keyboard-interactive'])
                     })
                 }
